@@ -24,8 +24,9 @@ let gossipQueue = [];           // 뒷담화 큐
 let userUsage = new Map();      // 사용자별 일일 사용량
 let reportQueue = [];           // 신고 큐 (새로 추가)
 let bannedUsers = new Set();    // 차단된 사용자 (새로 추가)
+let userBlocks = new Map();     // 개인별 차단 목록: Map<deviceId, Set<blockedDeviceId>>
 let activeGossip = null;        // 현재 표시중인 뒷담화
-let displayTimer = null;        // 5초 타이머
+let displayTimer = null;        // 10초 타이머
 
 const PORT = process.env.PORT || 3000;
 
@@ -62,11 +63,6 @@ const contentFilter = {
       if (pattern.test(content)) {
         return { allowed: false, reason: '개인정보나 연락처가 포함되어 있을 수 있습니다' };
       }
-    }
-    
-    // 반복 문자 체크 (4번 이상 반복)
-    if (/(.)\1{3,}/.test(content)) {
-      return { allowed: false, reason: '의미 없는 반복 문자는 사용할 수 없습니다' };
     }
     
     // 숫자만 있는 경우
@@ -115,8 +111,8 @@ app.post('/api/gossip', (req, res) => {
   const userKey = `${deviceId}-${today}`;
   const usage = userUsage.get(userKey) || 0;
   
-  if (usage >= 3) {
-    return res.status(429).json({ error: '하루 3번만 사용 가능합니다.' });
+  if (usage >= 10) {
+    return res.status(429).json({ error: '하루 10번만 사용 가능합니다.' });
   }
   
   // 뒷담화 생성
@@ -220,9 +216,32 @@ app.get('/api/usage/:deviceId', (req, res) => {
   
   res.json({ 
     usage,
-    remaining: 3 - usage,
+    remaining: 10 - usage,
     resetTime: new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString()
   });
+});
+
+// 사용자 차단 API
+app.post('/api/block', (req, res) => {
+  const { deviceId, targetDeviceId } = req.body;
+
+  if (!deviceId || !targetDeviceId) {
+    return res.status(400).json({ error: '필수 정보가 누락되었습니다.' });
+  }
+
+  if (deviceId === targetDeviceId) {
+    return res.status(400).json({ error: '자기 자신을 차단할 수 없습니다.' });
+  }
+
+  // 개인별 차단 목록에 추가
+  if (!userBlocks.has(deviceId)) {
+    userBlocks.set(deviceId, new Set());
+  }
+  userBlocks.get(deviceId).add(targetDeviceId);
+
+  console.log(`🚫 사용자 차단: ${deviceId} → ${targetDeviceId}`);
+
+  res.json({ success: true });
 });
 
 // 관리자 API - 신고 목록 조회 (새로 추가)
@@ -249,14 +268,14 @@ function processNextGossip() {
   console.log(`📢 표시 시작: "${activeGossip.content}"`);
   
   // 모든 클라이언트에 뒷담화 표시
-  io.emit('gossip-display', { 
-    gossip: activeGossip, 
-    timeLeft: 5,
-    queueLength: gossipQueue.length 
+  io.emit('gossip-display', {
+    gossip: activeGossip,
+    timeLeft: 10,
+    queueLength: gossipQueue.length
   });
-  
-  // 5초 카운트다운
-  let timeLeft = 5;
+
+  // 10초 카운트다운
+  let timeLeft = 10;
   const countdownInterval = setInterval(() => {
     timeLeft--;
     io.emit('countdown', { timeLeft, gossip: activeGossip });
@@ -331,7 +350,6 @@ function cleanupOldReports() {
 server.listen(PORT, () => {
   console.log(`🚀 임귀당귀 서버가 포트 ${PORT}에서 실행중입니다!`);
   console.log(`🌍 http://localhost:${PORT} 에서 확인하세요`);
-  console.log(`🔞 18세 이상 전용 익명 소통 서비스`);
   console.log(`🛡️ 강화된 콘텐츠 필터링 및 신고 시스템 활성화`);
   
   resetDailyUsage();
