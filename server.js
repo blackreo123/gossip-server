@@ -1,4 +1,5 @@
-require('dotenv').config();
+// dotenv는 로컬 개발용 (.env 파일이 있을 때만 로드)
+try { require('dotenv').config(); } catch(e) {}
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -16,7 +17,8 @@ app.use(express.json());
 
 // MongoDB 연결
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/gossipapp';
-console.log(`🔗 MongoDB URI: ${MONGODB_URI ? MONGODB_URI.replace(/\/\/.*@/, '//<credentials>@') : 'NOT SET'}`);
+console.log(`🔑 MONGODB_URI env exists: ${!!process.env.MONGODB_URI}`);
+console.log(`🔗 MongoDB URI: ${MONGODB_URI.replace(/\/\/.*@/, '//<credentials>@')}`);
 
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ MongoDB 연결 성공'))
