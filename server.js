@@ -16,6 +16,7 @@ app.use(express.json());
 
 // MongoDB 연결
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/gossipapp';
+console.log(`🔗 MongoDB URI: ${MONGODB_URI ? MONGODB_URI.replace(/\/\/.*@/, '//<credentials>@') : 'NOT SET'}`);
 
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ MongoDB 연결 성공'))
