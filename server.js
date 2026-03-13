@@ -3,6 +3,10 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
+
+const DATA_FILE = path.join(__dirname, 'usage-data.json');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,11 +23,43 @@ const io = socketIo(server, {
   }
 });
 
-// 메모리 기반 데이터 저장소
+// 파일에서 사용량 데이터 불러오기
+function loadUsageData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      const today = new Date().toDateString();
+      const map = new Map();
+      // 오늘 날짜의 데이터만 복원
+      for (const [key, value] of Object.entries(data)) {
+        if (key.endsWith(today)) {
+          map.set(key, value);
+        }
+      }
+      console.log(`📂 사용량 데이터 복원: ${map.size}명`);
+      return map;
+    }
+  } catch (err) {
+    console.error('⚠️ 사용량 데이터 로드 실패:', err.message);
+  }
+  return new Map();
+}
+
+// 사용량 데이터 파일에 저장
+function saveUsageData() {
+  try {
+    const obj = Object.fromEntries(userUsage);
+    fs.writeFileSync(DATA_FILE, JSON.stringify(obj), 'utf8');
+  } catch (err) {
+    console.error('⚠️ 사용량 데이터 저장 실패:', err.message);
+  }
+}
+
+// 데이터 저장소
 let gossipQueue = [];           // 뒷담화 큐
-let userUsage = new Map();      // 사용자별 일일 사용량
-let reportQueue = [];           // 신고 큐 (새로 추가)
-let bannedUsers = new Set();    // 차단된 사용자 (새로 추가)
+let userUsage = loadUsageData(); // 사용자별 일일 사용량 (파일에서 복원)
+let reportQueue = [];           // 신고 큐
+let bannedUsers = new Set();    // 차단된 사용자
 let userBlocks = new Map();     // 개인별 차단 목록: Map<deviceId, Set<blockedDeviceId>>
 let activeGossip = null;        // 현재 표시중인 뒷담화
 let displayTimer = null;        // 10초 타이머
@@ -126,8 +162,9 @@ app.post('/api/gossip', (req, res) => {
   // 큐에 추가
   gossipQueue.push(gossip);
   
-  // 사용량 증가
+  // 사용량 증가 및 저장
   userUsage.set(userKey, usage + 1);
+  saveUsageData();
   
   // 모든 클라이언트에 새 뒷담화 알림
   io.emit('new-gossip', {
@@ -319,13 +356,15 @@ function resetDailyUsage() {
   setTimeout(() => {
     console.log('🌙 자정! 일일 사용량을 초기화합니다.');
     userUsage.clear();
-    
+    saveUsageData();
+
     // 매일 자정마다 반복
     setInterval(() => {
       console.log('🌙 일일 사용량 초기화');
       userUsage.clear();
+      saveUsageData();
     }, 24 * 60 * 60 * 1000);
-    
+
   }, msUntilMidnight);
 }
 
