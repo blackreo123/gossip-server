@@ -329,9 +329,14 @@ function processNextGossip() {
       clearInterval(countdownInterval);
       console.log(`🗑️ 삭제됨: "${activeGossip.content}"`);
 
-      setTimeout(() => {
+      if (gossipQueue.length > 0) {
+        // 큐에 다음 글이 있으면 바로 표시
         processNextGossip();
-      }, 1000);
+      } else {
+        setTimeout(() => {
+          processNextGossip();
+        }, 1000);
+      }
     }
   }, 1000);
 }
