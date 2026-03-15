@@ -336,6 +336,11 @@ function processNextGossip() {
   }, 1000);
 }
 
+// 접속자 수 브로드캐스트
+function broadcastOnlineCount() {
+  io.emit('online-count', { count: io.sockets.sockets.size });
+}
+
 // Socket.IO 연결 처리
 io.on('connection', (socket) => {
   console.log(`🔗 클라이언트 연결: ${socket.id}`);
@@ -345,8 +350,11 @@ io.on('connection', (socket) => {
     queueLength: gossipQueue.length
   });
 
+  broadcastOnlineCount();
+
   socket.on('disconnect', () => {
     console.log(`🔌 클라이언트 연결 해제: ${socket.id}`);
+    broadcastOnlineCount();
   });
 });
 
